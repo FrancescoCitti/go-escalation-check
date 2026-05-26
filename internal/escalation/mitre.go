@@ -62,6 +62,18 @@ var mitreMap = map[string]MITREMapping{
 		SubtechniqueID: "T1098",
 		URL:            "https://attack.mitre.org/techniques/T1098/",
 	},
+	"mfa_removal": {
+		TechniqueID:    "T1556",
+		TechniqueName:  "Modify Authentication Process",
+		SubtechniqueID: "T1556.006",
+		URL:            "https://attack.mitre.org/techniques/T1556/006/",
+	},
+	"update_access_key": {
+		TechniqueID:    "T1098",
+		TechniqueName:  "Account Manipulation",
+		SubtechniqueID: "T1098.001",
+		URL:            "https://attack.mitre.org/techniques/T1098/001/",
+	},
 }
 
 func LookupMITRE(key string) MITREMapping {

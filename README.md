@@ -34,7 +34,7 @@ For example:
 
 These risks are hard to spot manually, especially in large accounts with many users, roles, groups, and policies layered on top of each other.
 
-`go-escalation-check` automates this analysis. It checks 18 known escalation techniques against every identity in an account and reports exactly which identities are at risk and why.
+`go-escalation-check` automates this analysis. It checks 26 known escalation techniques against every identity in an account and reports exactly which identities are at risk and why.
 
 ## What it produces
 
@@ -151,14 +151,22 @@ Useful for scanning without keeping live AWS credentials available, sharing with
 | Put Inline Admin Policy on Group | Writes an inline policy granting full admin access to a group | T1098.003 |
 | Put Inline Admin Policy on Role | Writes an inline policy granting full admin access to a role | T1098.003 |
 | Create Access Key for Admin User | Generates API credentials for a user who already has admin access | T1098.001 |
+| Reactivate Disabled Access Key for Admin User | Re-enables a deactivated programmatic credential on a user with admin access | T1098.001 |
 | Create Console Login for Admin User | Enables console login for a user who already has admin access | T1098 |
 | Reset Admin User Password | Changes the password of a user who already has admin access | T1098 |
 | Add Self to Admin Group | Adds a user to a group that has admin permissions | T1098 |
+| Deactivate MFA Device on Admin User | Removes MFA from a user with admin privileges, enabling password-only console access | T1556.006 |
+| Delete Virtual MFA Device from Admin User | Deletes the virtual MFA device from a user with admin privileges | T1556.006 |
 | Backdoor Role Trust Policy | Modifies a role trust policy to allow an identity to assume it | T1078.004 |
+| Directly Assume Admin Role | Calls sts:AssumeRole on an admin role whose trust policy already permits the caller | T1078.004 |
 | Pass Admin Role via EC2 | Launches an EC2 instance with an admin role attached and runs commands through it | T1548 |
 | Pass Admin Role via Lambda | Creates a Lambda function with an admin role and invokes it | T1548 |
 | Pass Admin Role via CloudFormation | Creates a CloudFormation stack that uses an admin role to provision resources | T1548 |
 | Pass Admin Role via Glue | Creates a Glue development endpoint with an admin role attached | T1548 |
+| Pass Admin Role via SageMaker | Creates a SageMaker notebook instance with an admin role to execute arbitrary code | T1548 |
+| Pass Admin Role via CodeBuild | Creates and starts a CodeBuild project with an admin role to run arbitrary build commands | T1548 |
+| Pass Admin Role via ECS | Registers an ECS task definition and runs it with an admin role attached | T1548 |
+| Pass Admin Role via Data Pipeline | Creates a Data Pipeline with an admin role to execute commands on provisioned resources | T1548 |
 | Create and Assume New Admin Role | Creates a new IAM role, attaches admin permissions to it, then assumes it | T1136.003 |
 
 ## Snapshot file format
