@@ -1,0 +1,277 @@
+{
+  "account_id": "123456789012",
+  "users": [
+    {
+      "arn": "arn:aws:iam::123456789012:user/alice",
+      "name": "alice",
+      "user_id": "AIDAEXAMPLEALICE00001",
+      "groups": ["developers"],
+      "attached_policies": [],
+      "inline_policies": [
+        {
+          "name": "alice_inline",
+          "document": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "iam:CreatePolicyVersion",
+                  "iam:AttachUserPolicy",
+                  "iam:PassRole",
+                  "ec2:RunInstances",
+                  "lambda:CreateFunction",
+                  "lambda:InvokeFunction"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:user/bob",
+      "name": "bob",
+      "user_id": "AIDAEXAMPLEBOB000002",
+      "groups": ["developers"],
+      "attached_policies": [
+        {
+          "arn": "arn:aws:iam::123456789012:policy/DevPolicy",
+          "name": "DevPolicy"
+        }
+      ],
+      "inline_policies": []
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:user/carol",
+      "name": "carol",
+      "user_id": "AIDAEXAMPLECAROL0003",
+      "groups": [],
+      "attached_policies": [],
+      "inline_policies": [
+        {
+          "name": "carol_sre_policy",
+          "document": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "iam:AddUserToGroup",
+                  "iam:UpdateAssumeRolePolicy",
+                  "iam:CreateAccessKey",
+                  "iam:UpdateLoginProfile"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:user/dave",
+      "name": "dave",
+      "user_id": "AIDAEXAMPLEDAVE00004",
+      "groups": ["readonly"],
+      "attached_policies": [],
+      "inline_policies": []
+    }
+  ],
+  "roles": [
+    {
+      "arn": "arn:aws:iam::123456789012:role/DeployRole",
+      "name": "DeployRole",
+      "role_id": "AROAEXAMPLEDEPLOY001",
+      "trust_document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "Service": "ec2.amazonaws.com" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "attached_policies": [],
+      "inline_policies": [
+        {
+          "name": "deploy_inline",
+          "document": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "iam:PassRole",
+                  "iam:AttachRolePolicy",
+                  "iam:PutRolePolicy",
+                  "cloudformation:CreateStack",
+                  "glue:CreateDevEndpoint"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:role/DataEngineering",
+      "name": "DataEngineering",
+      "role_id": "AROAEXAMPLEDATAENG02",
+      "trust_document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "Service": "glue.amazonaws.com" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "attached_policies": [
+        {
+          "arn": "arn:aws:iam::123456789012:policy/DataPolicy",
+          "name": "DataPolicy"
+        }
+      ],
+      "inline_policies": []
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:role/AdminRole",
+      "name": "AdminRole",
+      "role_id": "AROAEXAMPLEADMIN0003",
+      "trust_document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::123456789012:root" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "attached_policies": [
+        {
+          "arn": "arn:aws:iam::aws:policy/AdministratorAccess",
+          "name": "AdministratorAccess"
+        }
+      ],
+      "inline_policies": []
+    }
+  ],
+  "groups": [
+    {
+      "arn": "arn:aws:iam::123456789012:group/developers",
+      "name": "developers",
+      "group_id": "AGPAEXAMPLEDEVS0001",
+      "members": [
+        "arn:aws:iam::123456789012:user/alice",
+        "arn:aws:iam::123456789012:user/bob"
+      ],
+      "attached_policies": [
+        {
+          "arn": "arn:aws:iam::123456789012:policy/DevPolicy",
+          "name": "DevPolicy"
+        }
+      ],
+      "inline_policies": []
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:group/readonly",
+      "name": "readonly",
+      "group_id": "AGPAEXAMPLERO000002",
+      "members": [
+        "arn:aws:iam::123456789012:user/dave"
+      ],
+      "attached_policies": [
+        {
+          "arn": "arn:aws:iam::aws:policy/ReadOnlyAccess",
+          "name": "ReadOnlyAccess"
+        }
+      ],
+      "inline_policies": []
+    }
+  ],
+  "policies": [
+    {
+      "arn": "arn:aws:iam::123456789012:policy/DevPolicy",
+      "name": "DevPolicy",
+      "document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ec2:Describe*",
+              "s3:GetObject",
+              "s3:PutObject",
+              "iam:CreateRole",
+              "iam:AttachRolePolicy",
+              "lambda:CreateFunction",
+              "lambda:InvokeFunction",
+              "iam:PassRole"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "arn": "arn:aws:iam::123456789012:policy/DataPolicy",
+      "name": "DataPolicy",
+      "document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "glue:*",
+              "s3:GetObject",
+              "s3:PutObject",
+              "iam:PassRole",
+              "iam:PutRolePolicy"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "arn": "arn:aws:iam::aws:policy/AdministratorAccess",
+      "name": "AdministratorAccess",
+      "document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "*",
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "arn": "arn:aws:iam::aws:policy/ReadOnlyAccess",
+      "name": "ReadOnlyAccess",
+      "document": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ec2:Describe*",
+              "s3:GetObject",
+              "s3:ListBucket",
+              "iam:Get*",
+              "iam:List*"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    }
+  ]
+}

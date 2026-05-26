@@ -1,0 +1,4 @@
+go-escalation-check
+remediation/
+*.json.bak
+*.env
