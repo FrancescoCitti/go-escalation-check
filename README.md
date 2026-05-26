@@ -1,8 +1,8 @@
 # go-escalation-check
 
-AWS IAM privilege escalation path analyzer written in Go.
+A command-line tool that scans your AWS IAM configuration and finds every path an attacker (or a misconfigured user) could use to gain full administrator access.
 
-Reads your IAM configuration, builds a directed permission graph, finds every path to administrator-level access, and generates remediation artifacts ready to deploy.
+It reads your IAM users, roles, groups, and policies, maps out what each identity is allowed to do, and identifies dangerous permission combinations. For every problem it finds, it also generates the fix — a ready-to-deploy IAM policy and Terraform configuration that blocks the escalation path.
 
 ```
 go-escalation-check scan --snapshot testdata/sample_snapshot.json
@@ -11,7 +11,7 @@ Loading IAM snapshot: testdata/sample_snapshot.json
 Loaded  4 users  3 roles  2 groups  4 managed policies
 
 +-----------------+------+-------------------------------------+-----------+----------+
-|   PRINCIPAL     | KIND |             TECHNIQUE               |   MITRE   | SEVERITY |
+|    PRINCIPAL    | KIND |             TECHNIQUE               |   MITRE   | SEVERITY |
 +-----------------+------+-------------------------------------+-----------+----------+
 | alice           | user | Create New Policy Version           | T1484.001 | CRITICAL |
 | alice           | user | Attach Admin Policy to User         | T1098.003 | CRITICAL |
@@ -22,38 +22,58 @@ Loaded  4 users  3 roles  2 groups  4 managed policies
 37 finding(s) across 6 principal(s)
 ```
 
-## What it does
+## The problem it solves
 
-- **Permission graph** — models all IAM entities (users, roles, groups, policies) and the trust relationships between them
-- **Escalation detection** — checks 18 known privilege escalation techniques against each principal's effective permissions, including transitive group permissions
-- **MITRE ATT&CK mapping** — every finding is tagged with the corresponding technique ID (T1078, T1098, T1484, T1548, T1136)
-- **JIT restriction policies** — generates minimal deny-based IAM policies that block escalation paths without removing legitimate access
-- **Terraform HCL export** — produces deployment-ready `aws_iam_policy` and attachment resources for immediate remediation
+In AWS, a user does not need to already be an administrator to become one. If they have the right combination of IAM permissions — even seemingly harmless ones — they can quietly grant themselves full access. This is called **privilege escalation**.
 
-## Why this is different
+For example:
+- A user with `iam:AttachUserPolicy` can attach the `AdministratorAccess` policy to their own account.
+- A user with `iam:PassRole` and `ec2:RunInstances` can launch a server with an admin role attached and run commands through it.
+- A user with `iam:CreateRole` and `iam:AttachRolePolicy` can create a brand new admin role and assume it.
 
-[Cloudsplaining](https://github.com/salesforce/cloudsplaining) and [PMapper](https://github.com/nccgroup/PMapper) enumerate IAM misconfigurations in Python. This tool does something different: graph-based path analysis combined with JIT policy generation and Terraform output in a single binary. The JIT remediation angle comes from direct operational experience building a JIT IAM system that eliminated standing permissions for 140+ engineers.
+These risks are hard to spot manually, especially in large accounts with many users, roles, groups, and policies layered on top of each other.
+
+`go-escalation-check` automates this analysis. It checks 18 known escalation techniques against every identity in your account and tells you exactly who is at risk and why.
+
+## What it produces
+
+| Output | What it is |
+|--------|-----------|
+| **Table / JSON** | A list of every finding: who is affected, what technique they could use, and the MITRE ATT&CK technique ID |
+| **JIT policies** | Deny-based IAM policies that block only the dangerous actions for each affected identity, without removing their other permissions |
+| **Terraform HCL** | Ready-to-apply infrastructure code that deploys those policies to your AWS account |
+
+## How it works
+
+1. Loads all IAM users, roles, groups, and policies from your account (or a saved JSON file)
+2. Resolves the effective permissions for each identity — including permissions inherited through group membership
+3. Checks each identity against 18 escalation techniques (see full list below)
+4. For every match, generates a deny policy that blocks exactly the actions required for that technique
 
 ## Install
 
-```bash
-go install github.com/francescocitti/go-escalation-check@latest
-```
-
-Or build from source:
+**From source (requires Go 1.22+):**
 
 ```bash
-git clone https://github.com/francescocitti/go-escalation-check
+git clone https://github.com/FrancescoCitti/go-escalation-check
 cd go-escalation-check
 go build -o go-escalation-check .
 ```
 
-## Usage
-
-### Scan a snapshot (no AWS credentials needed)
+**Using `go install`:**
 
 ```bash
-go-escalation-check scan --snapshot testdata/sample_snapshot.json
+go install github.com/FrancescoCitti/go-escalation-check@latest
+```
+
+## Usage
+
+### Try it immediately — no AWS account needed
+
+The repo includes a sample snapshot with realistic fake IAM data:
+
+```bash
+go run . scan --snapshot testdata/sample_snapshot.json
 ```
 
 ### Scan a live AWS account
@@ -62,13 +82,17 @@ go-escalation-check scan --snapshot testdata/sample_snapshot.json
 go-escalation-check scan --profile my-profile --region us-east-1
 ```
 
-### Export findings as JSON
+This requires the `iam:GetAccountAuthorizationDetails` permission (read-only, makes no changes).
+
+### Get findings as JSON
+
+Useful for piping into other tools or saving for later:
 
 ```bash
 go-escalation-check scan --snapshot testdata/sample_snapshot.json --format json
 ```
 
-### Generate JIT policies and Terraform HCL
+### Generate fix files
 
 ```bash
 go-escalation-check scan \
@@ -78,46 +102,70 @@ go-escalation-check scan \
   --outdir ./remediation
 ```
 
-Produces:
-- `remediation/jit_policies.json` — deny-based policies with MFA and time conditions
-- `remediation/iam_remediation.tf` — ready-to-apply Terraform resources
+Writes two files to `./remediation/`:
+- `jit_policies.json` — one deny policy per affected identity, listing only the specific dangerous actions. Each policy includes an MFA requirement and an 8-hour expiry condition.
+- `iam_remediation.tf` — Terraform resources (`aws_iam_policy` + attachment) ready to apply.
 
-### Capture a live snapshot for offline use
+### Save a live account to a file for offline analysis
 
 ```bash
 go-escalation-check snapshot --profile prod --output prod_iam.json
 ```
 
-Requires `iam:GetAccountAuthorizationDetails`.
+This is useful for scanning without keeping live AWS credentials around, sharing with a colleague, or keeping a historical record.
+
+## All flags
+
+### `scan`
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--snapshot` | | Path to a JSON snapshot file. If omitted, reads from a live AWS account. |
+| `--profile` | | AWS named profile to use. |
+| `--region` | `us-east-1` | AWS region. |
+| `--format` | `table` | Output format: `table` or `json`. |
+| `--jit` | false | Write JIT restriction policies to `--outdir`. |
+| `--terraform` | false | Write Terraform HCL to `--outdir`. |
+| `--outdir` | `.` | Directory for generated output files. |
+
+### `snapshot`
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--profile` | | AWS named profile to use. |
+| `--region` | `us-east-1` | AWS region. |
+| `--output` | `iam_snapshot.json` | Output file path. |
 
 ## Escalation techniques detected
 
-| ID | Technique | MITRE |
-|----|-----------|-------|
-| create_new_policy_version | Create New Policy Version | T1484.001 |
-| set_default_policy_version | Set Default Policy Version | T1484.001 |
-| attach_user_policy | Attach Admin Policy to User | T1098.003 |
-| attach_group_policy | Attach Admin Policy to Group | T1098.003 |
-| attach_role_policy | Attach Admin Policy to Role | T1098.003 |
-| put_user_policy | Put Inline Admin Policy on User | T1098.003 |
-| put_group_policy | Put Inline Admin Policy on Group | T1098.003 |
-| put_role_policy | Put Inline Admin Policy on Role | T1098.003 |
-| create_access_key | Create Access Key for Admin User | T1098.001 |
-| create_login_profile | Create Console Login for Admin User | T1098 |
-| update_login_profile | Reset Admin User Password | T1098 |
-| add_user_to_group | Add Self to Admin Group | T1098 |
-| update_assume_role_policy | Backdoor Role Trust Policy | T1078.004 |
-| pass_role_ec2 | Pass Admin Role via EC2 | T1548 |
-| pass_role_lambda | Pass Admin Role via Lambda | T1548 |
-| pass_role_cloudformation | Pass Admin Role via CloudFormation | T1548 |
-| pass_role_glue | Pass Admin Role via Glue | T1548 |
-| create_admin_role | Create and Assume New Admin Role | T1136.003 |
+| Technique | What it means | MITRE |
+|-----------|---------------|-------|
+| Create New Policy Version | Create a new version of an attached managed policy that grants full admin access | T1484.001 |
+| Set Default Policy Version | Switch an existing policy back to an older version that had admin permissions | T1484.001 |
+| Attach Admin Policy to User | Attach the `AdministratorAccess` policy directly to a user | T1098.003 |
+| Attach Admin Policy to Group | Attach `AdministratorAccess` to a group you belong to | T1098.003 |
+| Attach Admin Policy to Role | Attach `AdministratorAccess` to a role you can assume | T1098.003 |
+| Put Inline Admin Policy on User | Write an inline policy granting full admin access to a user | T1098.003 |
+| Put Inline Admin Policy on Group | Write an inline policy granting full admin access to a group | T1098.003 |
+| Put Inline Admin Policy on Role | Write an inline policy granting full admin access to a role | T1098.003 |
+| Create Access Key for Admin User | Generate API credentials for a user who already has admin access | T1098.001 |
+| Create Console Login for Admin User | Enable console login for a user who already has admin access | T1098 |
+| Reset Admin User Password | Change the password of a user who already has admin access | T1098 |
+| Add Self to Admin Group | Add your own user to a group that has admin permissions | T1098 |
+| Backdoor Role Trust Policy | Modify a role's trust policy so your identity is allowed to assume it | T1078.004 |
+| Pass Admin Role via EC2 | Launch an EC2 instance with an admin role attached and run commands through it | T1548 |
+| Pass Admin Role via Lambda | Create a Lambda function with an admin role and invoke it | T1548 |
+| Pass Admin Role via CloudFormation | Create a CloudFormation stack that uses an admin role to provision resources | T1548 |
+| Pass Admin Role via Glue | Create a Glue development endpoint with an admin role attached | T1548 |
+| Create and Assume New Admin Role | Create a new IAM role, attach admin permissions to it, then assume it | T1136.003 |
 
-## Snapshot format
+## Snapshot file format
 
-The snapshot JSON format mirrors `aws iam get-account-authorization-details`. Use the `snapshot` subcommand to generate one from a live account, or write one by hand for testing. See `testdata/sample_snapshot.json` for a working example with multiple escalation paths.
+The JSON snapshot format matches the output of `aws iam get-account-authorization-details`. You can generate one with the `snapshot` subcommand, or write one manually for testing. See `testdata/sample_snapshot.json` for a complete working example.
 
-## Required IAM permissions for live scan
+## Required AWS permissions
+
+To scan a live account, the following read-only permission is required:
 
 ```json
 {
@@ -126,3 +174,5 @@ The snapshot JSON format mirrors `aws iam get-account-authorization-details`. Us
   "Resource": "*"
 }
 ```
+
+No write permissions are needed. The tool never modifies your AWS account.
